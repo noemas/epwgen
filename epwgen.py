@@ -6,7 +6,7 @@ base_dir = pf
 #name of job on cluster. Be mindful of regex metacharacters
 jobname = pf
 #location of the pseudopotentials where the calculations are run. Use absolute paths to directories througout.
-pps_dir = '/cluster/scratch/mnoe/QE/pps' 
+pps_dir = '/pps'
 #number of processors to be used for scf, bands and nscf calculations
 num_of_cpu_scf = 4
 #number of processors to be used for bands and nscf calculations
@@ -45,7 +45,7 @@ bands_dir = ''
 #    -Quantum Espresso including EPW package
 #    -python
 #    -gnuplot (optional)
-modules = ['quantum_espresso/6.4_rol', 'python/3.6.0', 'gnuplot']
+modules = ['quantum_espresso/6.4_rs', 'python/3.6.0', 'gnuplot']
 
 #note: time limits for calculations which should not take long have been set to 4h (shortest cluster limit)
 #these include wannier, bands_ip, q2r, matdyn
@@ -66,7 +66,7 @@ CELL_PARAMETERS angstrom
    -2.44018386041000    0.00000000000000    2.44018386041000
     0.00000000000000    2.44018386041000    2.44018386041000
    -2.44018386041000    2.44018386041000    0.00000000000000
-'''
+   '''
 #number of atoms in the unit cell (pw::nat)
 nat = 1
 
@@ -95,7 +95,6 @@ Pb 207.2 pb_s.UPF
 #   $atom_label_3 $x3 $y3 $z3
 #   etc.
 #'''
-
 atom_positions = '''
 ATOMIC_POSITIONS crystal
 Pb 0.00 0.00 0.00
@@ -126,7 +125,6 @@ random_sampling = False
 random_nkf = 80000
 random_nqf = 40000
 
-
 #occupation type (pw::occupations)
 occupations = 'smearing'
 #smearing type for the case if occupations = smearing (pw::smearing)
@@ -135,7 +133,7 @@ smearing = 'gaussian'
 degauss = '0.003674931'
 
 #number of bands calculated. Set to 0 if this should be determined automatically (pw::nbnd)
-nbnd = 0    
+nbnd = 0
 #amount of additional charge per unit cell - electrons negative, holes positive (pw::tot_charge)
 tot_charge = 0.0
 #accoustic sum rule type ('simple', 'crystal', 'one-dim', 'zero-dim', 'no' to disable) (ph::asr, q2r::zasr)
@@ -147,14 +145,14 @@ conv_thr = '1.0d-10'
 tr2_ph = '1.0d-12'
 
 #scf diagonalization algorithm - 'cg' or 'david' (pw::diagonalization)
-diagonalization = 'cg'
+diagonalization = 'david'
 
 #spin-orbit coupling (pw::noncolin, pw::lspinorb)
 soc = False
                     
 
 #____________________HIGH_SYMMETRY_LINES_______________________#
-#define an array of high symmetry points.
+#define an array of high symmetry points (in crystal coordinates)
 #Syntax: ['$point_label_1 $nk11 $nk21 $nk31', '$point_label_2 $nk12 $nk22 $nk32', etc]
 hisym_points = ['G 0 0 0', 
                 'X 0 0.5 0.5',
@@ -162,6 +160,7 @@ hisym_points = ['G 0 0 0',
                 'K 0.375 0.375 0.75',
                 'W 0.25 0.50 0.75'
                ]
+			   
 #define the high symmetry paths using the point labels defined in hisym_points
 #Syntax: ['$point_label_1', '$point_label_2', '$point_label_1', etc. ]
 hisym_path = ['G', 'X', 'W', 'L', 'K', 'G', 'L']
@@ -179,12 +178,13 @@ path_prec = 100
 nbndsub = 4
 #array of initial projections for Wannier functions. Check wannier90 documentation for syntax.
 #Set to 'random' if you have no initial guess
-#Syntax: ['$proj1', '$proj2', etc.] (example: ['random', 'W:l=2,mr=2,3,5'])
+#Syntax: ['$proj1', '$proj2', etc.] (example: ['random', 'W:l=2,mr=2,3,5:x=1,1,0'])
 wannier_init = ['Pb:sp3']
 #wannierization iterations (epw::num_iter)
 num_iter = 1000
 
-#automatic wannierization window determination
+#automatic wannierization window determination. This relies on q-e's algorithm to group eigenvalues into bands, which might give unsatisfying results
+#(see https://www.quantum-espresso.org/Doc/pp_user_guide/node7.html)
 auto_window = True
 
 #manual wannierization window specification. You only need to specify these parameters
@@ -221,12 +221,11 @@ nstemps = 10
 nsiter = 500
 #___________________________END________________________________#
 #____________________NOW_RUN_THE_SCRIPT________________________#
-#support for a custom q-e version that:
-#  -supports cg diagonalization for ph.x
+#support for a custom q-e version that (see https://gitlab.com/QEF/q-e/issues/138):
 #  -always looks for k+q bands regardless of the recover flag
 #  -keeps .bar, .mixd, and .dwf files in memory
 #  -allows linking _ph0 directory of r1 to r>1 directories
-custom = False 
+custom = True 
 comment = ""
 ph_recover = ".false."
 irr_link_or_cp_r1 = """
@@ -561,7 +560,7 @@ matdyn_in = ['''
     flfrc='{pf}.fc'
     flfrq='{pf}.freq'       
     q_in_band_form = .true.
-	q_in_cryst_coord = .true.
+    q_in_cryst_coord = .true.
 /
 {num_of_hsp}
 {kpoints}
@@ -742,10 +741,14 @@ a2F_in = ['''
     phonselfen  = .true.
     delta_approx = {delta_approx_enable}
     a2f         = .true.
+    nqstep      = 10000
 
     fsthick     = {fsthick}
     eptemp      = {eptemp}
-    degaussw    = {degaussw}        
+    degaussw    = {degaussw}     
+
+    lifc = .true.
+    asr_typ     = '{asr}'	
     
     efermi_read = .true.
     fermi_energy = 0.0
@@ -761,7 +764,7 @@ a2F_in = ['''
     {fine_grids}
 /
 '''.format(pf = pf, dvscf_dir = dvscf_dir, delta_approx_enable = delta_approx_enable, fsthick = fsthick, eptemp = eptemp, degaussw = degaussw,
-           nkf1 = nkf1, nkf2 = nkf2, nkf3 = nkf3, nqf1 = nqf1, nqf2 = nqf2, nqf3 = nqf3,
+           asr = asr, nkf1 = nkf1, nkf2 = nkf2, nkf3 = nkf3, nqf1 = nqf1, nqf2 = nqf2, nqf3 = nqf3,
            nk1 = nk1, nk2 = nk2, nk3 = nk3, nq1 = nq1, nq2 = nq2, nq3 = nq3,
            fine_grids = generate_fine_grids(random_sampling,random_nkf,random_nqf,nkf1,nkf2,nkf3,nqf1,nqf2,nqf3))]
 
@@ -802,6 +805,9 @@ eliashberg_iso = ['''
     degaussw    = {degaussw}
     wscut       = {wscut}
     muc         = {muc}
+	
+    lifc = .true.
+    asr_typ     = '{asr}'
 
     efermi_read = .true.
     fermi_energy = 0.0
@@ -834,7 +840,7 @@ eliashberg_iso = ['''
 /
 '''.format(pf = pf, dvscf_dir = dvscf_dir, nbndsub = nbndsub, nbndskip = nbndskip, num_iter = num_iter, projections = projections, 
            kpoints_wannier = kpoints_wannier, delta_approx_enable = delta_approx_enable, fsthick = fsthick, eptemp = eptemp,  degaussw = degaussw, 
-           wscut = wscut, muc = muc, nsiter = nsiter, tempsmin = tempsmin, tempsmax = tempsmax, nstemps = nstemps, nkf1 = nkf1, nkf2 = nkf2, nkf3 = nkf3,
+           wscut = wscut, muc = muc, asr = asr, nsiter = nsiter, tempsmin = tempsmin, tempsmax = tempsmax, nstemps = nstemps, nkf1 = nkf1, nkf2 = nkf2, nkf3 = nkf3,
            nqf1 = nqf1, nqf2 = nqf2, nqf3 = nqf3, nk1 = nk1, nk2 = nk2, nk3 = nk3, nq1 = nq1, nq2 = nq2, nq3 = nq3,
            fine_grids = generate_fine_grids(False,random_nkf,random_nqf,nkf1,nkf2,nkf3,nqf1,nqf2,nqf3))]
 
@@ -1312,120 +1318,6 @@ fi
 #ENDIF CALC_START
 #______________________________________________________________________________________#
 
-#======================================================================================#
-#janitor 
-#janitor is deprecated
-#IF CALC_START
-if false
-then
-#=======================================#
-#IF SPLIT_Q
-#if irreducible q-point parallelization is enabled
-if $split_q && ! $split_irr
-then
-   cat > job.sh << EOF
-{ph_janitor_sub}
-#get the number of irreducible q-points
-irr_qs=\$(sed "2q;d" {pf}.dyn0 | awk '{{print \$1}}')
-
-while true
-do
-    #stop if no more wfc are found ...
-    wfc_found=false
-    #..and all calculations have started
-    all_ph_started=true
-    
-    for ((q=2; q <= irr_qs; q++))
-    do
-        if [ -f q\${{q}}/ph_q\${{q}}.out ]
-        then        
-            wfc_files=\$(find q\${{q}} -name "{pf}.wfc*")
-            if ! [ "\$wfc_files" = "" ]
-            then
-                wfc_found=true
-            fi                
-            scf_start=\$(grep "iter #   1" q\${{q}}/ph_q\${{q}}.out)
-            if ! [ "\$scf_start" = "" ]
-            then
-                find q\${{q}} -name "{pf}.wfc*" -exec rm {{}} \;
-            fi          
-         else
-             all_ph_started=false         
-         fi           
-    done
-    
-    if ! [ \$wfc_found = true ] && [ \$all_ph_started = true ]
-    then
-        break
-    fi
-done
-EOF
-#ENDIF SPLIT_Q 
-#_______________________________________#
-
-#=======================================#
-#IF SPLIT_IRR
-#if irreducible representation parallelization is enabled
-elif $split_irr
-then
-   cat > job.sh << EOF
-   {ph_janitor_sub}
-   #get the number of irreducible q-points
-   irr_qs=\$(sed "2q;d" {pf}.dyn0 | awk '{{print \$1}}')
-   
-   #get the number of irreducible representations of each q-point and save them in an array
-   declare -a irreps
-   for ((i=0; i < irr_qs; i++))
-   do
-       q=\$((i+1))
-       irreps_el=\$(grep -A1 "<NUMBER_IRR_REP" _ph0/{pf}.phsave/patterns.\${{q}}.xml | tail -n1)
-       irreps[\$i]=\$irreps_el
-   done
-   
-   while true
-   do
-       #stop if no more wfc are found ...
-       wfc_found=false
-       #..and all calculations have started
-       all_ph_started=true
-       
-       for ((q=1; q <= irr_qs; q++))
-       do
-           i=\$((q-1))
-           for ((r=2; r <= irreps[i]; r++))
-           do
-               if [ -f q\${{q}}_r\${{r}}/ph_q\${{q}}_r\${{r}}.out ]
-               then        
-                   wfc_files=\$(find q\${{q}}_r\${{r}} -name "{pf}.wfc*")
-                   if ! [ "\$wfc_files" = "" ]
-                   then
-                       wfc_found=true
-                   fi                
-                   scf_start=\$(grep "iter #   1" q\${{q}}_r\${{r}}/ph_q\${{q}}_r\${{r}}.out)
-                   if ! [ "\$scf_start" = "" ]
-                   then
-                       find q\${{q}}_r\${{r}} -name "{pf}.wfc*" -exec rm {{}} \;
-                   fi          
-                else
-                    all_ph_started=false         
-                fi             
-           done
-       done
-       
-       if ! [ \$wfc_found = true ] && [ \$all_ph_started = true ]
-       then
-           break
-       fi
-   done
-EOF
-fi
-#ENDIF SPLIT_IRR
-
-#_______________________________________#
-{ph_janitor_cond_sub}
-fi
-#ENDIF CALC_START
-#______________________________________________________________________________________#
 
 #======================================================================================#
 #collect all results
@@ -1544,50 +1436,6 @@ do
     irreps[\$i]=\$irreps_el
 done
 
-#reinitialize if bands were linked
-#if [ -f _ph0/{pf}.phsave/control_ph.1.0.xml ]
-#then
-#   cp ph_start.in ph_start_temp.in
-#   line=\$(grep -n link_bands ph_start_temp.in | cut -d : -f 1)
-#   sed -i "\${{line}}s/\.true\./\.false\./1" ph_start_temp.in
-#   line=\$(grep -n recover ph_start_temp.in | cut -d : -f 1)
-#   sed -i "\${{line}}s/\.true\./\.false\./1" ph_start_temp.in
-#   mpirun ph.x -npool 1 -in ph_start_temp.in > ph_start_temp.out   
-#   rm ph_start_temp*
-#   
-#   #if we were linking bands make sure nothing went wrong with the displacements
-#   error=false
-#   index=0
-#   for ((q=1; q <= irr_qs; q++))
-#   do
-#      i=\$((q-1))
-#      for ((r=1; r <= irreps[i]; r++))
-#      do
-#         diffr=""
-#         if [ -f q\${{q}}_r1/_ph0/{pf}.phsave/patterns.\${{q}}.\${{r}}.xml ]
-#         then
-#            diffr=\$(diff _ph0/{pf}.phsave/patterns.\${{q}}.xml q\${{q}}_r1/_ph0/{pf}.phsave/patterns.\${{q}}.\${{r}}.xml)
-#         fi
-#         if ! [ "\$diffr" = "" ]
-#         then
-#            error=true
-#            if ((index==0))
-#            then
-#               echo "Something went wrong with the displacements (most likely a restart without deleting the patterns files first).\n\\
-#Restart (\#6) after I'm done cleaning affected calculations. Cleaning following calculations:"
-#            fi
-#            ((index++))
-#            echo "\$index: q\${{q}}_r\${{r}}"
-#            rm q\${{q}}_r1/_ph0/{pf}.phsave/*.*.\${{r}}.xml 
-#            rm q\${{q}}_r\${{r}}/ph_q\${{q}}_r\${{r}}.out
-#          fi
-#       done          
-#   done
-#   if \$error
-#   then
-#      exit
-#   fi
-#fi
 
 for ((q=1; q <= irr_qs; q++))
 do   
@@ -1751,7 +1599,7 @@ epw_sh = ['''
 #Execute from the parent directory (containing ELB, PHB, EPM, ISO directories).
 
 #Specify the number of bands to be wannierized, the index of the highest non-wannierized band and the initial guess...
-#...for the wannier functions. If you change this to get the windows in #3 right, you have to run #1 (with no_sub = true) again ...
+#...for the wannier functions. If you change this to get the windows in #3 right, you have to run #0 (with no_sub = true) again ...
 #...in order to reset the corresponding wannierization windows again.
 nbndsub={nbndsub}
 wannier_init={projections_epw}
